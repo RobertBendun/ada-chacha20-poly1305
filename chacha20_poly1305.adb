@@ -1,26 +1,26 @@
 pragma Ada_2022;
+with Common;
+
 with Ada.Assertions;
 with Ada.Command_Line;
 with Ada.Directories;
 with Ada.Numerics.Big_Numbers.Big_Integers;
-with Ada.Streams.Stream_IO;
 with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 with Ada.Unchecked_Conversion;
-with Ada.Unchecked_Deallocation;
-with Interfaces;
 
 use Ada.Assertions;
 use Ada.Directories;
 use Ada.Numerics.Big_Numbers.Big_Integers;
 use Ada.Text_IO;
-use Interfaces;
+
+with Common; use Common;
+with Interfaces; use Interfaces;
 
 
 -- Implementation of ChaCha20-Poly1305 as defined in RFC 7539
 -- https://www.rfc-editor.org/rfc/rfc7539
 procedure Chacha20_Poly1305 is
-
 	-- 2.1.  The ChaCha Quarter Round
 	procedure QR(A, B, C, D : in out Unsigned_32) is
 	begin
@@ -80,19 +80,11 @@ procedure Chacha20_Poly1305 is
 		Assert(State = Expected_State, "Failed Quarter_Round_Test");
 	end Quarter_Round_Test;
 
-	type Unsigned_8x4  is array (0..3)  of Unsigned_8;
-	type Unsigned_8x8  is array (0..7)  of Unsigned_8;
-	type Unsigned_8x16 is array (0..15) of Unsigned_8;
-	type Unsigned_8x32 is array (0..31) of Unsigned_8;
-	type Unsigned_8x64 is array (0..63) of Unsigned_8;
 
 	type ChaCha20_Key_32   is array (0..7)  of Unsigned_32;
 	type ChaCha20_Key_8    is new Unsigned_8x32;
 	type ChaCha20_Nonce_32 is array (0..2)  of Unsigned_32;
 	type ChaCha20_Nonce_8  is array (0..11) of Unsigned_8;
-
-	function Bytes is new Ada.Unchecked_Conversion(Source => Unsigned_32, Target => Unsigned_8x4);
-	function Bytes is new Ada.Unchecked_Conversion(Source => Unsigned_64, Target => Unsigned_8x8);
 
 	function Bytes is new Ada.Unchecked_Conversion(Source => ChaCha20_State,   Target => Unsigned_8x64);
 	function Ints  is new Ada.Unchecked_Conversion(Source => ChaCha20_Key_8,   Target => ChaCha20_Key_32);
@@ -162,48 +154,6 @@ procedure Chacha20_Poly1305 is
 		Assert(ChaCha20_Block(Key, Block_Count, Nonce) = Expected_Serialized_Block, "Failed ChaCha20_Block_Test");
 	end ChaCha20_Block_Test;
 
-	type Byte_Array is array (File_Size range <>) of Unsigned_8;
-	type Byte_Array_Access is access Byte_Array;
-	procedure Delete is new Ada.Unchecked_Deallocation(Byte_Array, Byte_Array_Access);
-
-	function Bytes(S: String) return Byte_Array_Access is
-		Result : Byte_Array_Access;
-	begin
-		Result := new Byte_Array(1 .. File_Size(S'Length));
-		for I in S'Range loop Result(File_Size(I)) := Unsigned_8(Character'Pos(S(I))); end loop;
-		return Result;
-	end Bytes;
-
-	function Read_Binary_File(Filename: String) return Byte_Array_Access is
-		package SIO renames Ada.Streams.Stream_IO;
-
-		Binary_File_Size : File_Size := Ada.Directories.Size(Filename);
-		Binary_File_Data : Byte_Array_Access;
-		S : SIO.Stream_Access;
-		File : SIO.File_Type;
-	begin
-		Binary_File_Data := new Byte_Array(1..Binary_File_Size);
-
-		SIO.Open(File, SIO.In_File, Filename);
-		S := SIO.Stream(File);
-		Byte_Array'Read(S, Binary_File_Data.all);
-
-		SIO.Close(File);
-
-		return Binary_File_Data;
-	end Read_Binary_File;
-
-	procedure Write_Binary_File(Filename: String; Data: Byte_Array)  is
-		package SIO renames Ada.Streams.Stream_IO;
-
-		S : SIO.Stream_Access;
-		File : SIO.File_Type;
-	begin
-		SIO.Create(File, SIO.Out_File, Filename);
-		S := SIO.Stream(File);
-		Byte_Array'Write(S, Data);
-		SIO.Close(File);
-	end Write_Binary_File;
 
 	-- 2.4.  The ChaCha20 Encryption Algorithm
 	function ChaCha20_Encrypt(
@@ -276,7 +226,6 @@ procedure Chacha20_Poly1305 is
 		Delete(Plain_Text);
 	end ChaCha20_Encrypt_Test;
 
-	function Ceil_Div(X, Y: Integer) return Integer is ((X + Y - 1) / Y);
 
 	type Poly1305_Key is new Unsigned_8x32;
 
@@ -474,15 +423,6 @@ procedure Chacha20_Poly1305 is
 		Put_Line("usage:");
 		Put_Line("  chacha20_poly1305 <AAD file> <key file> <nonce file> <in file> <out file>");
 	end Usage;
-
-
-	function Hex(Byte: Unsigned_8) return String is
-		Hex_Chars : constant array (Unsigned_8 range 0 .. 15) of Character := (
-			'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
-		);
-	begin
-		return Hex_Chars(Byte / 16) & Hex_Chars(Byte mod 16);
-	end Hex;
 
 	Additional_Auth_Data, Key, Nonce, Input, Output : Byte_Array_Access;
 	Tag : Unsigned_8x16;
