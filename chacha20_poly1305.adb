@@ -17,7 +17,8 @@ use Ada.Text_IO;
 use Interfaces;
 
 
--- Implementation of ChaCha20-Poly1305 as defined in RFC7539
+-- Implementation of ChaCha20-Poly1305 as defined in RFC 7539
+-- https://www.rfc-editor.org/rfc/rfc7539
 procedure Chacha20_Poly1305 is
 
 	-- 2.1.  The ChaCha Quarter Round
@@ -79,26 +80,33 @@ procedure Chacha20_Poly1305 is
 		Assert(State = Expected_State, "Failed Quarter_Round_Test");
 	end Quarter_Round_Test;
 
-	type Key_32   is array (0..7)  of Unsigned_32;
-	type Key_8    is array (0..31) of Unsigned_8;
-	type Nonce_32 is array (0..2)  of Unsigned_32;
-	type Nonce_8  is array (0..11) of Unsigned_8;
+	type Unsigned_8x4  is array (0..3)  of Unsigned_8;
+	type Unsigned_8x8  is array (0..7)  of Unsigned_8;
+	type Unsigned_8x16 is array (0..15) of Unsigned_8;
+	type Unsigned_8x32 is array (0..31) of Unsigned_8;
+	type Unsigned_8x64 is array (0..63) of Unsigned_8;
 
-	type Block is array (0..63) of Unsigned_8;
+	type ChaCha20_Key_32   is array (0..7)  of Unsigned_32;
+	type ChaCha20_Key_8    is new Unsigned_8x32;
+	type ChaCha20_Nonce_32 is array (0..2)  of Unsigned_32;
+	type ChaCha20_Nonce_8  is array (0..11) of Unsigned_8;
 
-	function Bytes is new Ada.Unchecked_Conversion(Source => ChaCha20_State, Target => Block);
-	function Ints  is new Ada.Unchecked_Conversion(Source => Key_8,   Target => Key_32);
-	function Ints  is new Ada.Unchecked_Conversion(Source => Nonce_8, Target => Nonce_32);
+	function Bytes is new Ada.Unchecked_Conversion(Source => Unsigned_32, Target => Unsigned_8x4);
+	function Bytes is new Ada.Unchecked_Conversion(Source => Unsigned_64, Target => Unsigned_8x8);
+
+	function Bytes is new Ada.Unchecked_Conversion(Source => ChaCha20_State,   Target => Unsigned_8x64);
+	function Ints  is new Ada.Unchecked_Conversion(Source => ChaCha20_Key_8,   Target => ChaCha20_Key_32);
+	function Ints  is new Ada.Unchecked_Conversion(Source => ChaCha20_Nonce_8, Target => ChaCha20_Nonce_32);
 
 	-- 2.3.  The ChaCha20 Block Function
-	function ChaCha20_Block(K: Key_32; Counter: Unsigned_32; N: Nonce_32) return Block is
+	function ChaCha20_Block(K: ChaCha20_Key_32; Counter: Unsigned_32; N: ChaCha20_Nonce_32) return Unsigned_8x64 is
 		State : ChaCha20_State;
 		Working_State : ChaCha20_State;
 	begin
 		State(0..3) := (16#61707865#, 16#3320646e#, 16#79622d32#, 16#6b206574#);
-		for I in Key_32'Range loop State(ChaCha20_State_Index(I+4)) := K(I); end loop;
+		for I in ChaCha20_Key_32'Range loop State(ChaCha20_State_Index(I+4)) := K(I); end loop;
 		State(12) := Counter;
-		for I in Nonce_32'Range loop State(ChaCha20_State_Index(I+13)) := N(I); end loop;
+		for I in ChaCha20_Nonce_32'Range loop State(ChaCha20_State_Index(I+13)) := N(I); end loop;
 
 		Working_State := State;
 
@@ -118,21 +126,21 @@ procedure Chacha20_Poly1305 is
 		return Bytes(State);
 	end ChaCha20_Block;
 
-	function ChaCha20_Block(K: Key_8; Counter: Unsigned_32; N: Nonce_8) return Block is
+	function ChaCha20_Block(K: ChaCha20_Key_8; Counter: Unsigned_32; N: ChaCha20_Nonce_8) return Unsigned_8x64 is
 	begin
 		return ChaCha20_Block(Ints(K), Counter, Ints(N));
 	end;
 
 	-- 2.3.2.  Test Vector for the ChaCha20 Block Function
 	procedure ChaCha20_Block_Test is
-		Key : constant Key_8 := (
+		Key : constant ChaCha20_Key_8 := (
 			16#00#, 16#01#, 16#02#, 16#03#, 16#04#, 16#05#, 16#06#, 16#07#,
 			16#08#, 16#09#, 16#0a#, 16#0b#, 16#0c#, 16#0d#, 16#0e#, 16#0f#,
 			16#10#, 16#11#, 16#12#, 16#13#, 16#14#, 16#15#, 16#16#, 16#17#,
 			16#18#, 16#19#, 16#1a#, 16#1b#, 16#1c#, 16#1d#, 16#1e#, 16#1f#
 		);
 
-		Nonce : constant Nonce_8 := (
+		Nonce : constant ChaCha20_Nonce_8 := (
 			16#00#, 16#00#, 16#00#, 16#09#,
 			16#00#, 16#00#, 16#00#, 16#4a#,
 			16#00#, 16#00#, 16#00#, 16#00#
@@ -140,7 +148,7 @@ procedure Chacha20_Poly1305 is
 
 		Block_Count : constant Unsigned_32 := 1;
 
-		Expected_Serialized_Block : constant Block := (
+		Expected_Serialized_Block : constant Unsigned_8x64 := (
 			16#10#, 16#f1#, 16#e7#, 16#e4#, 16#d1#, 16#3b#, 16#59#, 16#15#,
 			16#50#, 16#0f#, 16#dd#, 16#1f#, 16#a3#, 16#20#, 16#71#, 16#c4#,
 			16#c7#, 16#d1#, 16#f4#, 16#c7#, 16#33#, 16#c0#, 16#68#, 16#03#,
@@ -199,13 +207,13 @@ procedure Chacha20_Poly1305 is
 
 	-- 2.4.  The ChaCha20 Encryption Algorithm
 	function ChaCha20_Encrypt(
-		Key: Key_8;
+		Key: ChaCha20_Key_8;
 		Initial_Counter: Unsigned_32;
-		Nonce: Nonce_8;
+		Nonce: ChaCha20_Nonce_8;
 		Plain_Text: Byte_Array
 	) return Byte_Array_Access is
 		Full_Iterations : Unsigned_32;
-		Key_Stream : Block;
+		Key_Stream : Unsigned_8x64;
 		Encrypted : Byte_Array_Access;
 		Index : File_Size;
 	begin
@@ -235,9 +243,9 @@ procedure Chacha20_Poly1305 is
 
 	-- 2.4.2.  Example and Test Vector for the ChaCha20 Cipher
 	procedure ChaCha20_Encrypt_Test is
-		Key : Key_8;
+		Key : ChaCha20_Key_8;
 		Initial_Counter : constant Unsigned_32 := 1;
-		Nonce : constant Nonce_8 := (
+		Nonce : constant ChaCha20_Nonce_8 := (
 			16#00#, 16#00#, 16#00#, 16#00#,
 			16#00#, 16#00#, 16#00#, 16#4a#,
 			16#00#, 16#00#, 16#00#, 16#00#
@@ -259,7 +267,7 @@ procedure Chacha20_Poly1305 is
 		);
 
 	begin
-		for I in Key_8'Range loop Key(I) := Interfaces.Unsigned_8(I); end loop;
+		for I in ChaCha20_Key_8'Range loop Key(I) := Interfaces.Unsigned_8(I); end loop;
 		Encrypted := ChaCha20_Encrypt(Key, Initial_Counter, Nonce, Plain_Text.all);
 
 		Assert(Encrypted.all = Expected_Encrypted, "Failed ChaCha20_Encrypt_Test");
@@ -270,8 +278,7 @@ procedure Chacha20_Poly1305 is
 
 	function Ceil_Div(X, Y: Integer) return Integer is ((X + Y - 1) / Y);
 
-	type Unsigned_8x16 is array (0..15) of Unsigned_8;
-	type Poly1305_Key is array (0..31) of Unsigned_8;
+	type Poly1305_Key is new Unsigned_8x32;
 
 	function To_Big_Integer(B: Unsigned_8x16) return Big_Integer is
 		Result : Big_Integer := 0;
@@ -359,7 +366,7 @@ procedure Chacha20_Poly1305 is
 	end Poly1305_Mac_Test;
 
 	-- 2.6.  Generating the Poly1305 Key Using ChaCha20
-	function Poly1305_Key_Gen(Key: Key_8; Nonce: Nonce_8) return Poly1305_Key is
+	function Poly1305_Key_Gen(Key: ChaCha20_Key_8; Nonce: ChaCha20_Nonce_8) return Poly1305_Key is
 	begin
 		return Poly1305_Key(ChaCha20_Block(Key, 0, Nonce)(Poly1305_Key'Range));
 	end Poly1305_Key_Gen;
@@ -370,16 +377,11 @@ procedure Chacha20_Poly1305 is
 		null; -- TODO: Implement me
 	end Poly1305_Key_Gen_Test;
 
-	type Unsigned_8x4 is array (0..3) of Unsigned_8;
-	type Unsigned_8x8 is array (0..7) of Unsigned_8;
-	function Bytes is new Ada.Unchecked_Conversion(Source => Unsigned_32, Target => Unsigned_8x4);
-	function Bytes is new Ada.Unchecked_Conversion(Source => Unsigned_64, Target => Unsigned_8x8);
-
 	-- 2.8.  AEAD Construction
 	procedure ChaCha20_Aead_Encrypt(
 		Additional_Auth_Data : Byte_Array;
-		Key : Key_8;
-		Nonce : Nonce_8;
+		Key : ChaCha20_Key_8;
+		Nonce : ChaCha20_Nonce_8;
 		Plain_Text : Byte_Array;
 		Cipher_Text : out Byte_Array_Access;
 		Tag: out Unsigned_8x16
@@ -420,8 +422,8 @@ procedure Chacha20_Poly1305 is
 		Plain_Text : Byte_Array_Access := Bytes(Plain_Text_String);
 
 		AAD : Byte_Array_Access := Bytes("PQRS........");
-		Key : Key_8;
-		Nonce : Nonce_8 := (7, 0, 0, 0, 16#40#, 16#41#, 16#42#, 16#43#, 16#44#, 16#45#, 16#46#, 16#47#);
+		Key : ChaCha20_Key_8;
+		Nonce : ChaCha20_Nonce_8 := (7, 0, 0, 0, 16#40#, 16#41#, 16#42#, 16#43#, 16#44#, 16#45#, 16#46#, 16#47#);
 		Cipher_Text : Byte_Array_Access;
 		Tag : Unsigned_8x16;
 
@@ -444,8 +446,8 @@ procedure Chacha20_Poly1305 is
 			AAD.all(File_Size(5+I)) := Unsigned_8(16#c0# + I);
 		end loop;
 
-		for I in Key_8'Range loop
-			Key(I) := Unsigned_8(16#80# + (I - Key_8'First));
+		for I in ChaCha20_Key_8'Range loop
+			Key(I) := Unsigned_8(16#80# + (I - ChaCha20_Key_8'First));
 		end loop;
 
 		ChaCha20_Aead_Encrypt(AAD.all, Key, Nonce, Plain_Text.all, Cipher_Text, Tag);
@@ -500,8 +502,8 @@ begin
 
 	ChaCha20_Aead_Encrypt(
 		Additional_Auth_Data.all,
-		Key_8(Key.all),
-		Nonce_8(Nonce.all),
+		ChaCha20_Key_8(Key.all),
+		ChaCha20_Nonce_8(Nonce.all),
 		Input.all,
 		Output,
 		Tag
