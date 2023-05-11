@@ -1,3 +1,4 @@
 chacha20_poly1305
 *.ali
 *.o
+*.bin
