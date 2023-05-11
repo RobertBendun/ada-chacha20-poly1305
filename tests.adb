@@ -2,9 +2,12 @@ with Ada.Assertions; use Ada.Assertions;
 with Ada.Directories; use Ada.Directories;
 with Common; use Common;
 with Interfaces; use Interfaces;
-with ChaCha20; use ChaCha20;
-with Poly1305; use Poly1305;
-with AEAD; use AEAD;
+
+with ChaCha20;
+with Poly1305;
+with AEAD;
+
+use type ChaCha20.State;
 
 package body Tests is
 	procedure Run is
@@ -24,7 +27,7 @@ package body Tests is
 		C : Unsigned_32 := 16#9b8d6f43#;
 		D : Unsigned_32 := 16#01234567#;
 	begin
-		QR(A, B, C, D);
+		ChaCha20.QR(A, B, C, D);
 		Assert(A = 16#ea2a92f4#, "Failed QR_Test #1");
 		Assert(B = 16#cb1cf8ce#, "Failed QR_Test #2");
 		Assert(C = 16#4581472e#, "Failed QR_Test #3");
@@ -33,34 +36,34 @@ package body Tests is
 
 	-- 2.2.1.  Test Vector for the Quarter Round on the ChaCha State
 	procedure Quarter_Round_Test is
-		State : ChaCha20_State := (
+		State : ChaCha20.State := (
 			16#879531e0#, 16#c5ecf37d#, 16#516461b1#, 16#c9a62f8a#,
 			16#44c20ef3#, 16#3390af7f#, 16#d9fc690b#, 16#2a5f714c#,
 			16#53372767#, 16#b00a5631#, 16#974c541a#, 16#359e9963#,
 			16#5c971061#, 16#3d631689#, 16#2098d9d6#, 16#91dbd320#
 		);
 
-		Expected_State : constant ChaCha20_State := (
+		Expected_State : constant ChaCha20.State := (
 			16#879531e0#, 16#c5ecf37d#, 16#bdb886dc#, 16#c9a62f8a#,
 			16#44c20ef3#, 16#3390af7f#, 16#d9fc690b#, 16#cfacafd2#,
 			16#e46bea80#, 16#b00a5631#, 16#974c541a#, 16#359e9963#,
 			16#5c971061#, 16#ccc07c79#, 16#2098d9d6#, 16#91dbd320#
 		);
 	begin
-		Quarter_Round(State, 2, 7, 8, 13);
+		ChaCha20.Quarter_Round(State, 2, 7, 8, 13);
 		Assert(State = Expected_State, "Failed Quarter_Round_Test");
 	end Quarter_Round_Test;
 
 	-- 2.3.2.  Test Vector for the ChaCha20 Block Function
 	procedure ChaCha20_Block_Test is
-		Key : constant ChaCha20_Key_8 := (
+		Key : constant ChaCha20.Key_8 := (
 			16#00#, 16#01#, 16#02#, 16#03#, 16#04#, 16#05#, 16#06#, 16#07#,
 			16#08#, 16#09#, 16#0a#, 16#0b#, 16#0c#, 16#0d#, 16#0e#, 16#0f#,
 			16#10#, 16#11#, 16#12#, 16#13#, 16#14#, 16#15#, 16#16#, 16#17#,
 			16#18#, 16#19#, 16#1a#, 16#1b#, 16#1c#, 16#1d#, 16#1e#, 16#1f#
 		);
 
-		Nonce : constant ChaCha20_Nonce_8 := (
+		Nonce : constant ChaCha20.Nonce_8 := (
 			16#00#, 16#00#, 16#00#, 16#09#,
 			16#00#, 16#00#, 16#00#, 16#4a#,
 			16#00#, 16#00#, 16#00#, 16#00#
@@ -79,14 +82,14 @@ package body Tests is
 			16#cb#, 16#d0#, 16#83#, 16#e8#, 16#a2#, 16#50#, 16#3c#, 16#4e#
 		);
 	begin
-		Assert(ChaCha20_Block(Key, Block_Count, Nonce) = Expected_Serialized_Block, "Failed ChaCha20_Block_Test");
+		Assert(ChaCha20.Block(Key, Block_Count, Nonce) = Expected_Serialized_Block, "Failed ChaCha20.Block_Test");
 	end ChaCha20_Block_Test;
 
 	-- 2.4.2.  Example and Test Vector for the ChaCha20 Cipher
 	procedure ChaCha20_Encrypt_Test is
-		Key : ChaCha20_Key_8;
+		Key : ChaCha20.Key_8;
 		Initial_Counter : constant Unsigned_32 := 1;
-		Nonce : constant ChaCha20_Nonce_8 := (
+		Nonce : constant ChaCha20.Nonce_8 := (
 			16#00#, 16#00#, 16#00#, 16#00#,
 			16#00#, 16#00#, 16#00#, 16#4a#,
 			16#00#, 16#00#, 16#00#, 16#00#
@@ -108,17 +111,17 @@ package body Tests is
 		);
 
 	begin
-		for I in ChaCha20_Key_8'Range loop Key(I) := Interfaces.Unsigned_8(I); end loop;
-		Encrypted := ChaCha20_Encrypt(Key, Initial_Counter, Nonce, Plain_Text.all);
+		for I in ChaCha20.Key_8'Range loop Key(I) := Interfaces.Unsigned_8(I); end loop;
+		Encrypted := ChaCha20.Encrypt(Key, Initial_Counter, Nonce, Plain_Text.all);
 
-		Assert(Encrypted.all = Expected_Encrypted, "Failed ChaCha20_Encrypt_Test");
+		Assert(Encrypted.all = Expected_Encrypted, "Failed ChaCha20.Encrypt_Test");
 
 		Delete(Encrypted);
 		Delete(Plain_Text);
 	end ChaCha20_Encrypt_Test;
 
 	procedure Poly1305_Mac_Test is
-		Key : Poly1305_Key := (
+		Key : Poly1305.Key := (
 			16#85#, 16#d6#, 16#be#, 16#78#, 16#57#, 16#55#, 16#6d#, 16#33#,
 			16#7f#, 16#44#, 16#52#, 16#fe#, 16#42#, 16#d5#, 16#06#, 16#a8#,
 			16#01#, 16#03#, 16#80#, 16#8a#, 16#fb#, 16#0d#, 16#b2#, 16#fd#,
@@ -135,7 +138,7 @@ package body Tests is
 			16#c2#, 16#2b#, 16#8b#, 16#af#, 16#0c#, 16#01#, 16#27#, 16#a9#
 		);
 	begin
-		Tag := Poly1305_Mac(Message.all, Key);
+		Tag := Poly1305.Mac(Message.all, Key);
 		Assert(Tag = Expected_Tag, "Failed Poly1305_Mac_Test");
 
 		Delete(Message);
@@ -152,8 +155,8 @@ package body Tests is
 		Plain_Text : Byte_Array_Access := Bytes(Plain_Text_String);
 
 		AAD : Byte_Array_Access := Bytes("PQRS........");
-		Key : ChaCha20_Key_8;
-		Nonce : ChaCha20_Nonce_8 := (7, 0, 0, 0, 16#40#, 16#41#, 16#42#, 16#43#, 16#44#, 16#45#, 16#46#, 16#47#);
+		Key : ChaCha20.Key_8;
+		Nonce : ChaCha20.Nonce_8 := (7, 0, 0, 0, 16#40#, 16#41#, 16#42#, 16#43#, 16#44#, 16#45#, 16#46#, 16#47#);
 		Cipher_Text : Byte_Array_Access;
 		Tag : Unsigned_8x16;
 
@@ -176,14 +179,14 @@ package body Tests is
 			AAD.all(File_Size(5+I)) := Unsigned_8(16#c0# + I);
 		end loop;
 
-		for I in ChaCha20_Key_8'Range loop
-			Key(I) := Unsigned_8(16#80# + (I - ChaCha20_Key_8'First));
+		for I in ChaCha20.Key_8'Range loop
+			Key(I) := Unsigned_8(16#80# + (I - ChaCha20.Key_8'First));
 		end loop;
 
-		ChaCha20_Aead_Encrypt(AAD.all, Key, Nonce, Plain_Text.all, Cipher_Text, Tag);
+		AEAD.Encrypt(AAD.all, Key, Nonce, Plain_Text.all, Cipher_Text, Tag);
 
-		Assert(Cipher_Text.all = Expected_Ciphertext, "Failed in ChaCha20_Aead_Encrypt Cipher_Text");
-		Assert(Tag = Expected_Tag, "Failed in ChaCha20_Aead_Encrypt Tag");
+		Assert(Cipher_Text.all = Expected_Ciphertext, "Failed in ChaCha20.Aead_Encrypt Cipher_Text");
+		Assert(Tag = Expected_Tag, "Failed in ChaCha20.Aead_Encrypt Tag");
 
 		Delete(Cipher_Text);
 		Delete(AAD);

@@ -1,7 +1,6 @@
 with Ada.Directories; use Ada.Directories;
 
 package body ChaCha20 is
-
 	-- 2.1.  The ChaCha Quarter Round
 	procedure QR(A, B, C, D : in out Unsigned_32) is
 	begin
@@ -12,29 +11,29 @@ package body ChaCha20 is
 	end QR;
 
 	-- 2.2.  A Quarter Round on the ChaCha State
-	procedure Quarter_Round(S: in out ChaCha20_State; A, B, C, D: ChaCha20_State_Index) is
+	procedure Quarter_Round(S: in out State; A, B, C, D: State_Index) is
 	begin
 		QR(S(A), S(B), S(C), S(D));
 	end Quarter_Round;
 
 
 	-- 2.3.  The ChaCha20 Block Function
-	function ChaCha20_Block(K: ChaCha20_Key_8; Counter: Unsigned_32; N: ChaCha20_Nonce_8) return Unsigned_8x64 is
+	function Block(K: Key_8; Counter: Unsigned_32; N: Nonce_8) return Unsigned_8x64 is
 	begin
-		return ChaCha20_Block(Ints(K), Counter, Ints(N));
+		return Block(Ints(K), Counter, Ints(N));
 	end;
 
 	-- 2.3.  The ChaCha20 Block Function
-	function ChaCha20_Block(K: ChaCha20_Key_32; Counter: Unsigned_32; N: ChaCha20_Nonce_32) return Unsigned_8x64 is
-		State : ChaCha20_State;
-		Working_State : ChaCha20_State;
+	function Block(K: Key_32; Counter: Unsigned_32; N: Nonce_32) return Unsigned_8x64 is
+		Initial_State : State;
+		Working_State : State;
 	begin
-		State(0..3) := (16#61707865#, 16#3320646e#, 16#79622d32#, 16#6b206574#);
-		for I in ChaCha20_Key_32'Range loop State(ChaCha20_State_Index(I+4)) := K(I); end loop;
-		State(12) := Counter;
-		for I in ChaCha20_Nonce_32'Range loop State(ChaCha20_State_Index(I+13)) := N(I); end loop;
+		Initial_State(0..3) := (16#61707865#, 16#3320646e#, 16#79622d32#, 16#6b206574#);
+		for I in Key_32'Range loop Initial_State(State_Index(I+4)) := K(I); end loop;
+		Initial_State(12) := Counter;
+		for I in Nonce_32'Range loop Initial_State(State_Index(I+13)) := N(I); end loop;
 
-		Working_State := State;
+		Working_State := Initial_State;
 
 		for I in 1..10 loop
 			Quarter_Round(Working_State, 0, 4,  8, 12);
@@ -48,15 +47,15 @@ package body ChaCha20 is
 			Quarter_Round(Working_State, 3, 4,  9, 14);
 		end loop;
 
-		State := State + Working_State;
-		return Bytes(State);
-	end ChaCha20_Block;
+		Working_State := Initial_State + Working_State;
+		return Bytes(Working_State);
+	end Block;
 
 	-- 2.4.  The ChaCha20 Encryption Algorithm
-	function ChaCha20_Encrypt(
-		Key: ChaCha20_Key_8;
+	function Encrypt(
+		Key: Key_8;
 		Initial_Counter: Unsigned_32;
-		Nonce: ChaCha20_Nonce_8;
+		Nonce: Nonce_8;
 		Plain_Text: Byte_Array
 	) return Byte_Array_Access is
 		Full_Iterations : Unsigned_32;
@@ -69,7 +68,7 @@ package body ChaCha20 is
 		Encrypted := new Byte_Array(1..Plain_Text'Length);
 
 		for J in 0..Full_Iterations loop
-			Key_Stream := ChaCha20_Block(Key, Initial_Counter+J, Nonce);
+			Key_Stream := Block(Key, Initial_Counter+J, Nonce);
 
 			for I in 0 .. 63 loop
 				Index := File_Size(J * 64 + Unsigned_32(I) + 1);
@@ -78,7 +77,7 @@ package body ChaCha20 is
 		end loop;
 
 		if (Plain_Text'Length mod 64) /= 0 then
-			Key_Stream := ChaCha20_Block(Key, Initial_Counter+Full_Iterations+1, Nonce);
+			Key_Stream := Block(Key, Initial_Counter+Full_Iterations+1, Nonce);
 			for I in 0 .. Integer((Plain_Text'Last mod 64) - 1) loop
 				Index := File_Size((Full_Iterations+1)*64 + 1 + Unsigned_32(I));
 				Encrypted(Index) := Key_Stream(I) xor Plain_Text(Index);
@@ -86,12 +85,12 @@ package body ChaCha20 is
 		end if;
 
 		return Encrypted;
-	end ChaCha20_Encrypt;
+	end Encrypt;
 
-	function "+"(L, R: ChaCha20_State) return ChaCha20_State is
-		Result: ChaCha20_State;
+	function "+"(L, R: State) return State is
+		Result: State;
 	begin
-		for I in ChaCha20_State'Range loop Result(I) := L(I) + R(I); end loop;
+		for I in State'Range loop Result(I) := L(I) + R(I); end loop;
 		return Result;
 	end;
 end ChaCha20;

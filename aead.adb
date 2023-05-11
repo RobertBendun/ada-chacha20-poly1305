@@ -3,29 +3,29 @@ with Ada.Directories; use Ada.Directories;
 
 package body AEAD is
 	-- 2.6.  Generating the Poly1305 Key Using ChaCha20
-	function Poly1305_Key_Gen(Key: ChaCha20_Key_8; Nonce: ChaCha20_Nonce_8) return Poly1305_Key is
+	function Poly1305_Key_Gen(Key: ChaCha20.Key_8; Nonce: ChaCha20.Nonce_8) return Poly1305.Key is
 	begin
-		return Poly1305_Key(ChaCha20_Block(Key, 0, Nonce)(Poly1305_Key'Range));
+		return Poly1305.Key(ChaCha20.Block(Key, 0, Nonce)(Poly1305.Key'Range));
 	end Poly1305_Key_Gen;
 
 
 	-- 2.8.  AEAD Construction
-	procedure ChaCha20_Aead_Encrypt(
+	procedure Encrypt(
 		Additional_Auth_Data : Byte_Array;
-		Key : ChaCha20_Key_8;
-		Nonce : ChaCha20_Nonce_8;
+		Key : ChaCha20.Key_8;
+		Nonce : ChaCha20.Nonce_8;
 		Plain_Text : Byte_Array;
 		Cipher_Text : out Byte_Array_Access;
 		Tag: out Unsigned_8x16
 	) is
 		function Aligned_Size(N: Integer) return Integer is (16 * Ceil_Div(N, 16));
 
-		One_Time_Key : Poly1305_Key;
+		One_Time_Key : Poly1305.Key;
 		Mac_Data_Size, Offset : Integer := 0;
 		Mac_Data : Byte_Array_Access;
 	begin
 		One_Time_Key := Poly1305_Key_Gen(Key, Nonce);
-		Cipher_Text := ChaCha20_Encrypt(Key, 1, Nonce, Plain_Text);
+		Cipher_Text := ChaCha20.Encrypt(Key, 1, Nonce, Plain_Text);
 
 		Mac_Data_Size := Aligned_Size(Additional_Auth_Data'Length)
 			+ Aligned_Size(Cipher_Text'Length)
@@ -44,8 +44,8 @@ package body AEAD is
 		Offset := Offset + 8;
 		Mac_Data.all(File_Size(Offset) .. File_Size(Offset + 7)) := Byte_Array(Bytes(Unsigned_64(Cipher_Text'Length)));
 
-		Tag := Poly1305_Mac(Mac_Data.all, One_Time_Key);
+		Tag := Poly1305.Mac(Mac_Data.all, One_Time_Key);
 
 		Delete(Mac_Data);
-	end ChaCha20_Aead_Encrypt;
+	end Encrypt;
 end AEAD;

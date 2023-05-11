@@ -3,7 +3,7 @@ with Ada.Directories; use Ada.Directories;
 
 package body Poly1305 is
 	-- 2.5.  The Poly1305 Algorithm
-	function Poly1305_Mac(Message: Byte_Array; Key: Poly1305_Key) return Unsigned_8x16 is
+	function Mac(Message: Byte_Array; K: Key) return Unsigned_8x16 is
 		package UC is new Ada.Numerics.Big_Numbers.Big_Integers.Unsigned_Conversions(Unsigned_8);
 
 		function Clamp(R: Unsigned_8x16) return Unsigned_8x16 is
@@ -36,8 +36,8 @@ package body Poly1305 is
 		P : constant Big_Integer := (2 ** 130) - 5;
 		Result : Unsigned_8x16 := (others => 0);
 	begin
-		R := To_Big_Integer(Clamp(Unsigned_8x16(Key( 0 .. 15))));
-		S := To_Big_Integer(Unsigned_8x16(Key(16 .. 31)));
+		R := To_Big_Integer(Clamp(Unsigned_8x16(K( 0 .. 15))));
+		S := To_Big_Integer(Unsigned_8x16(K(16 .. 31)));
 
 		for I in 1 .. Ceil_Div(Message'Length, 16) loop
 			N := (Accumulator + Number_At(I)) * R;
@@ -51,7 +51,7 @@ package body Poly1305 is
 		end loop;
 
 		return Result;
-	end Poly1305_Mac;
+	end Mac;
 
 	function To_Big_Integer(B: Unsigned_8x16) return Big_Integer is
 		Result : Big_Integer := 0;

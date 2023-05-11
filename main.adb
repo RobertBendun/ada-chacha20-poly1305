@@ -1,28 +1,13 @@
 pragma Ada_2022;
-with Common;
 
-with Ada.Assertions;
+with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Command_Line;
-with Ada.Directories;
-with Ada.Numerics.Big_Numbers.Big_Integers;
-with Ada.Strings.Unbounded;
-with Ada.Text_IO;
-with Ada.Unchecked_Conversion;
-
-use Ada.Assertions;
-use Ada.Directories;
-use Ada.Numerics.Big_Numbers.Big_Integers;
-use Ada.Text_IO;
-
 with Common; use Common;
-with Interfaces; use Interfaces;
-with ChaCha20; use ChaCha20;
-with Poly1305; use Poly1305;
-with AEAD; use AEAD;
 with Tests;
 
--- Implementation of ChaCha20-Poly1305 as defined in RFC 7539
--- https://www.rfc-editor.org/rfc/rfc7539
+with AEAD;
+with ChaCha20;
+
 procedure Main is
 	procedure Usage is
 	begin
@@ -46,10 +31,10 @@ begin
 	Nonce                := Read_Binary_File(Ada.Command_Line.Argument(3));
 	Input                := Read_Binary_File(Ada.Command_Line.Argument(4));
 
-	ChaCha20_Aead_Encrypt(
+	AEAD.Encrypt(
 		Additional_Auth_Data.all,
-		ChaCha20_Key_8(Key.all),
-		ChaCha20_Nonce_8(Nonce.all),
+		ChaCha20.Key_8(Key.all),
+		ChaCha20.Nonce_8(Nonce.all),
 		Input.all,
 		Output,
 		Tag
