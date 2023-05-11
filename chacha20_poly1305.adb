@@ -7,6 +7,7 @@ with Ada.Text_IO;
 with Ada.Unchecked_Conversion;
 with Ada.Unchecked_Deallocation;
 with Interfaces;
+with Ada.Numerics.Big_Numbers.Big_Integers;
 
 use Ada.Assertions;
 use Ada.Directories;
@@ -35,10 +36,10 @@ procedure Chacha20_Poly1305 is
 		D : Unsigned_32 := 16#01234567#;
 	begin
 		QR(A, B, C, D);
-		Assert(A = 16#ea2a92f4#);
-		Assert(B = 16#cb1cf8ce#);
-		Assert(C = 16#4581472e#);
-		Assert(D = 16#5881c4bb#);
+		Assert(A = 16#ea2a92f4#, "Failed QR_Test #1");
+		Assert(B = 16#cb1cf8ce#, "Failed QR_Test #2");
+		Assert(C = 16#4581472e#, "Failed QR_Test #3");
+		Assert(D = 16#5881c4bb#, "Failed QR_Test #4");
 	end QR_Test;
 
 	type ChaCha20_State_Index is range 0 .. 15;
@@ -74,7 +75,7 @@ procedure Chacha20_Poly1305 is
 		);
 	begin
 		Quarter_Round(State, 2, 7, 8, 13);
-		Assert(State = Expected_State);
+		Assert(State = Expected_State, "Failed Quarter_Round_Test");
 	end Quarter_Round_Test;
 
 	type Key_32   is array (0..7)  of Unsigned_32;
@@ -149,7 +150,7 @@ procedure Chacha20_Poly1305 is
 			16#cb#, 16#d0#, 16#83#, 16#e8#, 16#a2#, 16#50#, 16#3c#, 16#4e#
 		);
 	begin
-		Assert(ChaCha20_Block(Key, Block_Count, Nonce) = Expected_Serialized_Block);
+		Assert(ChaCha20_Block(Key, Block_Count, Nonce) = Expected_Serialized_Block, "Failed ChaCha20_Block_Test");
 	end ChaCha20_Block_Test;
 
 	type Byte_Array is array (File_Size range <>) of Unsigned_8;
@@ -248,10 +249,102 @@ procedure Chacha20_Poly1305 is
 		for I in Key_8'Range loop Key(I) := Interfaces.Unsigned_8(I); end loop;
 		Encrypted := ChaCha20_Encrypt(Key, Initial_Counter, Nonce, Plain_Text.all);
 
-		Assert(Encrypted.all = Expected_Encrypted);
+		Assert(Encrypted.all = Expected_Encrypted, "Failed ChaCha20_Encrypt_Test");
+
 		Delete(Encrypted);
 		Delete(Plain_Text);
 	end ChaCha20_Encrypt_Test;
+
+	type Unsigned_8x16 is array (0..15) of Unsigned_8;
+	type Poly1305_Key is array (0..31) of Unsigned_8;
+
+	-- 2.5.  The Poly1305 Algorithm
+	function Poly1305_Mac(Message: Byte_Array; Key: Poly1305_Key) return Unsigned_8x16 is
+		use Ada.Numerics.Big_Numbers.Big_Integers;
+		package UC is new Ada.Numerics.Big_Numbers.Big_Integers.Unsigned_Conversions(Unsigned_8);
+
+		function Clamp(R: Unsigned_8x16) return Unsigned_8x16 is
+			Result : Unsigned_8x16 := R;
+		begin
+			Result(3)  := Result(3)  and 15;
+			Result(7)  := Result(7)  and 15;
+			Result(11) := Result(11) and 15;
+			Result(15) := Result(15) and 15;
+			Result(4)  := Result(4)  and 252;
+			Result(8)  := Result(8)  and 252;
+			Result(12) := Result(12) and 252;
+			return Result;
+		end Clamp;
+
+		function Number_At(I: Integer) return Big_Integer is
+			Result : Big_Integer := 1;
+			Index : File_Size;
+		begin
+			for J in reverse 1 .. 16 loop
+				Index := File_Size((I-1)*16 + J);
+				if Index <= Message'Last then
+					Result := Result * 256 + To_Big_Integer(Integer(Message(Index)));
+				end if;
+			end loop;
+			return Result;
+		end Number_At;
+
+		function To_Big_Integer(B: Unsigned_8x16) return Big_Integer is
+			Result : Big_Integer := 0;
+			Index : File_Size;
+		begin
+			for J in reverse Unsigned_8x16'Range loop
+					Result := Result * 256 + To_Big_Integer(Integer(B(J)));
+			end loop;
+			return Result;
+		end To_Big_Integer;
+
+		function Cail_Div(X, Y: Integer) return Integer is ((X + Y - 1) / Y);
+
+		R, S, Accumulator, N : Big_Integer := 0;
+		P : constant Big_Integer := (2 ** 130) - 5;
+		Result : Unsigned_8x16 := (others => 0);
+	begin
+		R := To_Big_Integer(Clamp(Unsigned_8x16(Key( 0 .. 15))));
+		S := To_Big_Integer(Unsigned_8x16(Key(16 .. 31)));
+
+		for I in 1 .. Cail_Div(Message'Length, 16) loop
+			N := (Accumulator + Number_At(I)) * R;
+			Accumulator := N mod P;
+		end loop;
+		Accumulator := Accumulator + S;
+
+		for I in Unsigned_8x16'Range loop
+			Result(I) := UC.From_Big_Integer(Accumulator mod 256);
+			Accumulator := Accumulator / 256;
+		end loop;
+
+		return Result;
+	end Poly1305_Mac;
+
+	procedure Poly1305_Mac_Test is
+		Key : Poly1305_Key := (
+			16#85#, 16#d6#, 16#be#, 16#78#, 16#57#, 16#55#, 16#6d#, 16#33#,
+			16#7f#, 16#44#, 16#52#, 16#fe#, 16#42#, 16#d5#, 16#06#, 16#a8#,
+			16#01#, 16#03#, 16#80#, 16#8a#, 16#fb#, 16#0d#, 16#b2#, 16#fd#,
+			16#4a#, 16#bf#, 16#f6#, 16#af#, 16#41#, 16#49#, 16#f5#, 16#1b#
+		);
+
+		Message_String : String := "Cryptographic Forum Research Group";
+		Message : Byte_Array_Access := Bytes(Message_String);
+
+		Tag : Unsigned_8x16;
+
+		Expected_Tag : constant Unsigned_8x16 := (
+			16#a8#, 16#06#, 16#1d#, 16#c1#, 16#30#, 16#51#, 16#36#, 16#c6#,
+			16#c2#, 16#2b#, 16#8b#, 16#af#, 16#0c#, 16#01#, 16#27#, 16#a9#
+		);
+	begin
+		Tag := Poly1305_Mac(Message.all, Key);
+		Assert(Tag = Expected_Tag, "Failed Poly1305_Mac_Test");
+
+		Delete(Message);
+	end Poly1305_Mac_Test;
 
 	procedure Tests is
 	begin
@@ -259,6 +352,7 @@ procedure Chacha20_Poly1305 is
 		Quarter_Round_Test;
 		ChaCha20_Block_Test;
 		ChaCha20_Encrypt_Test;
+		Poly1305_Mac_Test;
 	end Tests;
 begin
 	Tests;
