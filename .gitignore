@@ -1,4 +1,4 @@
-chacha20_poly1305
+chacha20_poly1305_aead
 *.ali
 *.o
 *.bin
