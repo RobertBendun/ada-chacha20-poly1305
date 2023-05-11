@@ -12,13 +12,13 @@ with Interfaces;
 
 use Ada.Assertions;
 use Ada.Directories;
+use Ada.Numerics.Big_Numbers.Big_Integers;
 use Ada.Text_IO;
 use Interfaces;
 
 
 -- Implementation of ChaCha20-Poly1305 as defined in RFC7539
 procedure Chacha20_Poly1305 is
-	package SU renames Ada.Strings.Unbounded;
 
 	-- 2.1.  The ChaCha Quarter Round
 	procedure QR(A, B, C, D : in out Unsigned_32) is
@@ -185,6 +185,18 @@ procedure Chacha20_Poly1305 is
 		return Binary_File_Data;
 	end Read_Binary_File;
 
+	procedure Write_Binary_File(Filename: String; Data: Byte_Array)  is
+		package SIO renames Ada.Streams.Stream_IO;
+
+		S : SIO.Stream_Access;
+		File : SIO.File_Type;
+	begin
+		SIO.Create(File, SIO.Out_File, Filename);
+		S := SIO.Stream(File);
+		Byte_Array'Write(S, Data);
+		SIO.Close(File);
+	end Write_Binary_File;
+
 	-- 2.4.  The ChaCha20 Encryption Algorithm
 	function ChaCha20_Encrypt(
 		Key: Key_8;
@@ -261,9 +273,18 @@ procedure Chacha20_Poly1305 is
 	type Unsigned_8x16 is array (0..15) of Unsigned_8;
 	type Poly1305_Key is array (0..31) of Unsigned_8;
 
+	function To_Big_Integer(B: Unsigned_8x16) return Big_Integer is
+		Result : Big_Integer := 0;
+		Index : File_Size;
+	begin
+		for J in reverse Unsigned_8x16'Range loop
+				Result := Result * 256 + To_Big_Integer(Integer(B(J)));
+		end loop;
+		return Result;
+	end To_Big_Integer;
+
 	-- 2.5.  The Poly1305 Algorithm
 	function Poly1305_Mac(Message: Byte_Array; Key: Poly1305_Key) return Unsigned_8x16 is
-		use Ada.Numerics.Big_Numbers.Big_Integers;
 		package UC is new Ada.Numerics.Big_Numbers.Big_Integers.Unsigned_Conversions(Unsigned_8);
 
 		function Clamp(R: Unsigned_8x16) return Unsigned_8x16 is
@@ -291,16 +312,6 @@ procedure Chacha20_Poly1305 is
 			end loop;
 			return Result;
 		end Number_At;
-
-		function To_Big_Integer(B: Unsigned_8x16) return Big_Integer is
-			Result : Big_Integer := 0;
-			Index : File_Size;
-		begin
-			for J in reverse Unsigned_8x16'Range loop
-					Result := Result * 256 + To_Big_Integer(Integer(B(J)));
-			end loop;
-			return Result;
-		end To_Big_Integer;
 
 		R, S, Accumulator, N : Big_Integer := 0;
 		P : constant Big_Integer := (2 ** 130) - 5;
@@ -463,6 +474,14 @@ procedure Chacha20_Poly1305 is
 	end Usage;
 
 
+	function Hex(Byte: Unsigned_8) return String is
+		Hex_Chars : constant array (Unsigned_8 range 0 .. 15) of Character := (
+			'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
+		);
+	begin
+		return Hex_Chars(Byte / 16) & Hex_Chars(Byte mod 16);
+	end Hex;
+
 	Additional_Auth_Data, Key, Nonce, Input, Output : Byte_Array_Access;
 	Tag : Unsigned_8x16;
 begin
@@ -475,14 +494,9 @@ begin
 	end if;
 
 	Additional_Auth_Data := Read_Binary_File(Ada.Command_Line.Argument(1));
-	Key := Read_Binary_File(Ada.Command_Line.Argument(2));
-	Nonce := Read_Binary_File(Ada.Command_Line.Argument(3));
-	Input := Read_Binary_File(Ada.Command_Line.Argument(4));
-
-	Put_Line(Integer'Image(Additional_Auth_Data'Length));
-	Put_Line(Integer'Image(Key'Length));
-	Put_Line(Integer'Image(Nonce'Length));
-	Put_Line(Integer'Image(Input'Length));
+	Key                  := Read_Binary_File(Ada.Command_Line.Argument(2));
+	Nonce                := Read_Binary_File(Ada.Command_Line.Argument(3));
+	Input                := Read_Binary_File(Ada.Command_Line.Argument(4));
 
 	ChaCha20_Aead_Encrypt(
 		Additional_Auth_Data.all,
@@ -493,6 +507,13 @@ begin
 		Tag
 	);
 
+	Write_Binary_File(Ada.Command_Line.Argument(5), Output.all);
+
+	Put("Tag: ");
+	for I in reverse Tag'Range loop
+		Put(Hex(Tag(I)));
+	end loop;
+	New_Line;
 
 	Delete(Additional_Auth_Data);
 	Delete(Input);
