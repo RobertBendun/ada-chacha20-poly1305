@@ -255,6 +255,8 @@ procedure Chacha20_Poly1305 is
 		Delete(Plain_Text);
 	end ChaCha20_Encrypt_Test;
 
+	function Ceil_Div(X, Y: Integer) return Integer is ((X + Y - 1) / Y);
+
 	type Unsigned_8x16 is array (0..15) of Unsigned_8;
 	type Poly1305_Key is array (0..31) of Unsigned_8;
 
@@ -299,8 +301,6 @@ procedure Chacha20_Poly1305 is
 			return Result;
 		end To_Big_Integer;
 
-		function Cail_Div(X, Y: Integer) return Integer is ((X + Y - 1) / Y);
-
 		R, S, Accumulator, N : Big_Integer := 0;
 		P : constant Big_Integer := (2 ** 130) - 5;
 		Result : Unsigned_8x16 := (others => 0);
@@ -308,7 +308,7 @@ procedure Chacha20_Poly1305 is
 		R := To_Big_Integer(Clamp(Unsigned_8x16(Key( 0 .. 15))));
 		S := To_Big_Integer(Unsigned_8x16(Key(16 .. 31)));
 
-		for I in 1 .. Cail_Div(Message'Length, 16) loop
+		for I in 1 .. Ceil_Div(Message'Length, 16) loop
 			N := (Accumulator + Number_At(I)) * R;
 			Accumulator := N mod P;
 		end loop;
@@ -346,6 +346,85 @@ procedure Chacha20_Poly1305 is
 		Delete(Message);
 	end Poly1305_Mac_Test;
 
+	-- 2.6.  Generating the Poly1305 Key Using ChaCha20
+	function Poly1305_Key_Gen(Key: Key_8; Nonce: Nonce_8) return Poly1305_Key is
+	begin
+		return Poly1305_Key(ChaCha20_Block(Key, 0, Nonce)(Poly1305_Key'Range));
+	end Poly1305_Key_Gen;
+
+	-- 2.6.2.  Poly1305 Key Generation Test Vector
+	procedure Poly1305_Key_Gen_Test is
+	begin
+		null; -- TODO: Implement me
+	end Poly1305_Key_Gen_Test;
+
+	type Unsigned_8x4 is array (0..3) of Unsigned_8;
+	function Bytes is new Ada.Unchecked_Conversion(Source => Unsigned_32, Target => Unsigned_8x4);
+
+	-- 2.8.  AEAD Construction
+	procedure ChaCha20_Aead_Encrypt(
+		Additional_Auth_Data : Byte_Array;
+		Key : Key_8;
+		Nonce : Nonce_8;
+		Plain_Text : Byte_Array;
+		Cipher_Text : out Byte_Array_Access;
+		Tag: out Unsigned_8x16
+	) is
+		function Aligned_Size(N: Integer) return Integer is (16 * Ceil_Div(N, 16));
+
+		One_Time_Key : Poly1305_Key;
+		Mac_Data_Size, Offset : Integer := 0;
+		Mac_Data : Byte_Array_Access;
+	begin
+		One_Time_Key := Poly1305_Key_Gen(Key, Nonce);
+		Cipher_Text := ChaCha20_Encrypt(Key, 1, Nonce, Plain_Text);
+
+		Mac_Data_Size := Aligned_Size(Additional_Auth_Data'Length)
+			+ Aligned_Size(Cipher_Text'Length)
+			+ 2 * 4;
+
+		Mac_Data := new Byte_Array(1 .. File_Size(Mac_Data_Size));
+		Mac_Data.all := (others => 0);
+
+		Mac_Data.all(1 .. File_Size(Additional_Auth_Data'Length)) := Byte_Array(Additional_Auth_Data);
+		Offset := Aligned_Size(Integer(Additional_Auth_Data'Last));
+
+		Mac_Data.all(File_Size(Offset) .. File_Size(Offset + Cipher_Text'Length)) := Cipher_Text.all;
+		Offset := Offset + Aligned_Size(Integer(Cipher_Text'Last));
+
+		Mac_Data.all(File_Size(Offset) .. File_Size(Offset + 3)) := Byte_Array(Bytes(Unsigned_32(Additional_Auth_Data'Length)));
+		Offset := Offset + 4;
+		Mac_Data.all(File_Size(Offset) .. File_Size(Offset + 3)) := Byte_Array(Bytes(Unsigned_32(Cipher_Text'Length)));
+
+		Tag := Poly1305_Mac(Mac_Data.all, One_Time_Key);
+
+		Delete(Mac_Data);
+	end ChaCha20_Aead_Encrypt;
+
+	procedure ChaCha20_Aead_Encrypt_Test is
+		Plain_Text_String : String := "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.";
+		Plain_Text : Byte_Array_Access := Bytes(Plain_Text_String);
+
+		AAD : Byte_Array_Access := Bytes("PQRS........");
+		Key : Key_8;
+		Nonce : Nonce_8 := (7, 0, 0, 0, 16#40#, 16#41#, 16#42#, 16#43#, 16#44#, 16#45#, 16#46#, 16#47#);
+		Cipher_Text : Byte_Array_Access;
+		Tag : Unsigned_8x16;
+	begin
+		for I in 0..7 loop
+			AAD.all(File_Size(5+I)) := Unsigned_8(16#c0# + I);
+		end loop;
+
+		for I in Key_8'Range loop
+			Key(I) := Unsigned_8(16#80# + (I - Key_8'First));
+		end loop;
+
+		ChaCha20_Aead_Encrypt(AAD.all, Key, Nonce, Plain_Text.all, Cipher_Text, Tag);
+
+		Delete(Cipher_Text);
+		Delete(AAD);
+	end ChaCha20_Aead_Encrypt_Test;
+
 	procedure Tests is
 	begin
 		QR_Test;
@@ -353,6 +432,7 @@ procedure Chacha20_Poly1305 is
 		ChaCha20_Block_Test;
 		ChaCha20_Encrypt_Test;
 		Poly1305_Mac_Test;
+		ChaCha20_Aead_Encrypt_Test;
 	end Tests;
 begin
 	Tests;
