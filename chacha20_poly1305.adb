@@ -1,13 +1,14 @@
 pragma Ada_2022;
 with Ada.Assertions;
+with Ada.Command_Line;
 with Ada.Directories;
+with Ada.Numerics.Big_Numbers.Big_Integers;
 with Ada.Streams.Stream_IO;
 with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 with Ada.Unchecked_Conversion;
 with Ada.Unchecked_Deallocation;
 with Interfaces;
-with Ada.Numerics.Big_Numbers.Big_Integers;
 
 use Ada.Assertions;
 use Ada.Directories;
@@ -359,7 +360,9 @@ procedure Chacha20_Poly1305 is
 	end Poly1305_Key_Gen_Test;
 
 	type Unsigned_8x4 is array (0..3) of Unsigned_8;
+	type Unsigned_8x8 is array (0..7) of Unsigned_8;
 	function Bytes is new Ada.Unchecked_Conversion(Source => Unsigned_32, Target => Unsigned_8x4);
+	function Bytes is new Ada.Unchecked_Conversion(Source => Unsigned_64, Target => Unsigned_8x8);
 
 	-- 2.8.  AEAD Construction
 	procedure ChaCha20_Aead_Encrypt(
@@ -381,20 +384,20 @@ procedure Chacha20_Poly1305 is
 
 		Mac_Data_Size := Aligned_Size(Additional_Auth_Data'Length)
 			+ Aligned_Size(Cipher_Text'Length)
-			+ 2 * 4;
+			+ 2 * 8;
 
 		Mac_Data := new Byte_Array(1 .. File_Size(Mac_Data_Size));
 		Mac_Data.all := (others => 0);
 
 		Mac_Data.all(1 .. File_Size(Additional_Auth_Data'Length)) := Byte_Array(Additional_Auth_Data);
-		Offset := Aligned_Size(Integer(Additional_Auth_Data'Last));
+		Offset := Aligned_Size(Integer(Additional_Auth_Data'Last)) + 1;
 
-		Mac_Data.all(File_Size(Offset) .. File_Size(Offset + Cipher_Text'Length)) := Cipher_Text.all;
+		Mac_Data.all(File_Size(Offset) .. (File_Size(Offset) + Cipher_Text'Last - 1)) := Cipher_Text.all;
 		Offset := Offset + Aligned_Size(Integer(Cipher_Text'Last));
 
-		Mac_Data.all(File_Size(Offset) .. File_Size(Offset + 3)) := Byte_Array(Bytes(Unsigned_32(Additional_Auth_Data'Length)));
-		Offset := Offset + 4;
-		Mac_Data.all(File_Size(Offset) .. File_Size(Offset + 3)) := Byte_Array(Bytes(Unsigned_32(Cipher_Text'Length)));
+		Mac_Data.all(File_Size(Offset) .. File_Size(Offset + 7)) := Byte_Array(Bytes(Unsigned_64(Additional_Auth_Data'Length)));
+		Offset := Offset + 8;
+		Mac_Data.all(File_Size(Offset) .. File_Size(Offset + 7)) := Byte_Array(Bytes(Unsigned_64(Cipher_Text'Length)));
 
 		Tag := Poly1305_Mac(Mac_Data.all, One_Time_Key);
 
@@ -410,6 +413,21 @@ procedure Chacha20_Poly1305 is
 		Nonce : Nonce_8 := (7, 0, 0, 0, 16#40#, 16#41#, 16#42#, 16#43#, 16#44#, 16#45#, 16#46#, 16#47#);
 		Cipher_Text : Byte_Array_Access;
 		Tag : Unsigned_8x16;
+
+		Expected_Tag : constant Unsigned_8x16 := (
+			16#1a#, 16#e1#, 16#0b#, 16#59#, 16#4f#, 16#09#, 16#e2#, 16#6a#, 16#7e#, 16#90#, 16#2e#, 16#cb#, 16#d0#, 16#60#, 16#06#, 16#91#
+		);
+
+		Expected_Ciphertext : constant Byte_Array := (
+			16#d3#, 16#1a#, 16#8d#, 16#34#, 16#64#, 16#8e#, 16#60#, 16#db#, 16#7b#, 16#86#, 16#af#, 16#bc#, 16#53#, 16#ef#, 16#7e#, 16#c2#,
+			16#a4#, 16#ad#, 16#ed#, 16#51#, 16#29#, 16#6e#, 16#08#, 16#fe#, 16#a9#, 16#e2#, 16#b5#, 16#a7#, 16#36#, 16#ee#, 16#62#, 16#d6#,
+			16#3d#, 16#be#, 16#a4#, 16#5e#, 16#8c#, 16#a9#, 16#67#, 16#12#, 16#82#, 16#fa#, 16#fb#, 16#69#, 16#da#, 16#92#, 16#72#, 16#8b#,
+			16#1a#, 16#71#, 16#de#, 16#0a#, 16#9e#, 16#06#, 16#0b#, 16#29#, 16#05#, 16#d6#, 16#a5#, 16#b6#, 16#7e#, 16#cd#, 16#3b#, 16#36#,
+			16#92#, 16#dd#, 16#bd#, 16#7f#, 16#2d#, 16#77#, 16#8b#, 16#8c#, 16#98#, 16#03#, 16#ae#, 16#e3#, 16#28#, 16#09#, 16#1b#, 16#58#,
+			16#fa#, 16#b3#, 16#24#, 16#e4#, 16#fa#, 16#d6#, 16#75#, 16#94#, 16#55#, 16#85#, 16#80#, 16#8b#, 16#48#, 16#31#, 16#d7#, 16#bc#,
+			16#3f#, 16#f4#, 16#de#, 16#f0#, 16#8e#, 16#4b#, 16#7a#, 16#9d#, 16#e5#, 16#76#, 16#d2#, 16#65#, 16#86#, 16#ce#, 16#c6#, 16#4b#,
+			16#61#, 16#16#
+		);
 	begin
 		for I in 0..7 loop
 			AAD.all(File_Size(5+I)) := Unsigned_8(16#c0# + I);
@@ -420,6 +438,9 @@ procedure Chacha20_Poly1305 is
 		end loop;
 
 		ChaCha20_Aead_Encrypt(AAD.all, Key, Nonce, Plain_Text.all, Cipher_Text, Tag);
+
+		Assert(Cipher_Text.all = Expected_Ciphertext, "Failed in ChaCha20_Aead_Encrypt Cipher_Text");
+		Assert(Tag = Expected_Tag, "Failed in ChaCha20_Aead_Encrypt Tag");
 
 		Delete(Cipher_Text);
 		Delete(AAD);
@@ -436,4 +457,5 @@ procedure Chacha20_Poly1305 is
 	end Tests;
 begin
 	Tests;
+
 end Chacha20_Poly1305;
