@@ -19,23 +19,20 @@ package body Common is
 		return Result;
 	end Bytes;
 
-	function Read_Binary_File(Filename: String) return Byte_Array_Access is
+	procedure Read_Binary_File(Filename: String; Data : out Byte_Array_Access) is
 		package SIO renames Ada.Streams.Stream_IO;
 
 		Binary_File_Size : File_Size := Ada.Directories.Size(Filename);
-		Binary_File_Data : Byte_Array_Access;
 		S : SIO.Stream_Access;
 		File : SIO.File_Type;
 	begin
-		Binary_File_Data := new Byte_Array(1..Binary_File_Size);
+		Data := new Byte_Array(1..Binary_File_Size);
 
 		SIO.Open(File, SIO.In_File, Filename);
 		S := SIO.Stream(File);
-		Byte_Array'Read(S, Binary_File_Data.all);
+		Byte_Array'Read(S, Data.all);
 
 		SIO.Close(File);
-
-		return Binary_File_Data;
 	end Read_Binary_File;
 
 	procedure Write_Binary_File(Filename: String; Data: Byte_Array)  is
@@ -47,6 +44,30 @@ package body Common is
 		SIO.Create(File, SIO.Out_File, Filename);
 		S := SIO.Stream(File);
 		Byte_Array'Write(S, Data);
+		SIO.Close(File);
+	end Write_Binary_File;
+
+	procedure Read_Binary_File(Filename: String; Data: out Unsigned_8x16) is
+		package SIO renames Ada.Streams.Stream_IO;
+		S : SIO.Stream_Access;
+		File : SIO.File_Type;
+	begin
+		SIO.Open(File, SIO.In_File, Filename);
+		S := SIO.Stream(File);
+		Unsigned_8x16'Read(S, Data);
+
+		SIO.Close(File);
+	end Read_Binary_File;
+
+	procedure Write_Binary_File(Filename: String; Data: Unsigned_8x16) is
+		package SIO renames Ada.Streams.Stream_IO;
+
+		S : SIO.Stream_Access;
+		File : SIO.File_Type;
+	begin
+		SIO.Create(File, SIO.Out_File, Filename);
+		S := SIO.Stream(File);
+		Unsigned_8x16'Write(S, Data);
 		SIO.Close(File);
 	end Write_Binary_File;
 end Common;

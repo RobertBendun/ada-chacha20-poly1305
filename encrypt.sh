@@ -14,7 +14,7 @@ head -c 12 /dev/random > nonce.bin
 printf "%s" "$(file --mime-type "$1" | cut -d' ' -f2)" > aad.bin
 cp "$1" plain.bin
 
-"$EXEC" aad.bin key.bin nonce.bin "$1" cipher.bin > tag.txt
+"$EXEC" encrypt aad.bin key.bin nonce.bin "$1" cipher.bin > tag.txt
 
 tar -czf encrypted.tar.gz key.bin nonce.bin aad.bin tag.txt cipher.bin
 echo "All artifacts has ben archived into encrypted.tar.gz"

@@ -13,4 +13,4 @@ echo "0: 90 91 92 93 94 95 96 97 98 99 9a 9b 9c 9d 9e 9f" | xxd -r >> key.bin
 echo "0: 07 00 00 00 40 41 42 43 44 45 46 47"             | xxd -r > nonce.bin
 printf "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it." > plain.bin
 
-"$EXEC" aad.bin key.bin nonce.bin plain.bin cipher.bin
+"$EXEC" encrypt aad.bin key.bin nonce.bin plain.bin cipher.bin tag.bin

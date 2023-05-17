@@ -21,6 +21,9 @@ package Common is
 	procedure Delete is new Ada.Unchecked_Deallocation(Byte_Array, Byte_Array_Access);
 
 	function  Bytes(S: String) return Byte_Array_Access;
-	function  Read_Binary_File(Filename: String) return Byte_Array_Access;
+	procedure Read_Binary_File(Filename: String; Data: out Byte_Array_Access);
 	procedure Write_Binary_File(Filename: String; Data: Byte_Array);
+
+	procedure Read_Binary_File(Filename: String; Data: out Unsigned_8x16);
+	procedure Write_Binary_File(Filename: String; Data: Unsigned_8x16);
 end Common;

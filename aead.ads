@@ -15,4 +15,13 @@ package AEAD is
 		Cipher_Text : out Byte_Array_Access;
 		Tag: out Unsigned_8x16
 	);
+
+	function Decrypt(
+		Additional_Auth_Data: Byte_Array;
+		Key: ChaCha20.Key_8;
+		Nonce: ChaCha20.Nonce_8;
+		Cipher_Text: Byte_Array;
+		Expected_Tag: Unsigned_8x16;
+		Plain_Text: out Byte_Array_Access
+	) return Boolean;
 end AEAD;
